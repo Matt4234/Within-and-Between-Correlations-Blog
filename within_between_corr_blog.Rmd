@@ -1,0 +1,62 @@
+---
+title: "Within-Between Correlations"
+author: "Matthew Schell"
+date: "2/17/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(rmcorr)
+library(tidyverse)
+library(labelled)
+library(Hmisc)
+
+bland <- bland1995
+
+#Labeling variables and values
+var_label(bland) <- c(Subject = "Subject ID", pH = "Stomach pH", PacO2 = "Blood PacO2")
+val_labels(bland$Subject) <- c("Subject 1" = 1, "Subject 2" = 2, "Subject 3" = 3, "Subject 4" = 4, "Subject 5" = 5, "Subject 6" = 6, "Subject 7" = 7, "Subject 8" = 8)
+
+#Within correlations
+bland$Subject <- as.factor(bland$Subject)
+bland.rmcorr <- rmcorr(participant = Subject, pH, PacO2, dataset = bland)
+print(bland.rmcorr)
+plot(bland.rmcorr, xlab = "pH", ylab = "PacO2")
+
+#Between correlations
+#Calculate the correlation between pH and PacO2 treating all observations as independent
+bt.corr2 <- select(bland, pH, PacO2)
+rcorr(as.matrix(bt.corr2), type = "pearson")
+
+#Make a dataset that contains only 1 observation from each individual while keeping all variables
+df1 <- distinct(bland, Subject, .keep_all = T)
+
+#Calculate mean values for pH and PacO2 for each subject
+df2 <- bland %>%
+  group_by(Subject) %>% 
+  summarise(pH_mean = mean(pH), PacO2_mean = mean(PacO2))
+
+#Add the mean values to our dataset with 1 observation per subject
+bt.corr <- left_join(df1, df2, by = "Subject")
+
+#Calculate the correlation between means of pH and PacO2
+bt.corr <- select(bt.corr, pH_mean, PacO2_mean)
+rcorr(as.matrix(bt.corr), type = "pearson")
+
+
+
+bland.model <- lm(PacO2_mean ~ pH_mean, data = bt.corr)
+summary(bland.model)
+
+btplot <- ggplot(bt.corr, aes(x = pH_mean, y = PacO2_mean)) +
+  geom_point() +
+  geom_smooth(method = lm) +
+  labs(x = "pH", y = "PacO2")
+
+ggsave("btplot.png", dpi = 600)
+```
+
